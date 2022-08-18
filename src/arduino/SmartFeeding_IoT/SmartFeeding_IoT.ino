@@ -1,6 +1,6 @@
 /******************************************************************************************
  * FileName     : SmartLight_iot.ino
- * Description  : 이티보드 스마트 가로등 코딩 키트(IoT)
+ * Description  : 이티보드 스마트 모이공급 코딩 키트(IoT)
  * Author       : SCS
  * Created Date : 2022.08.06
  * Reference    : 
@@ -14,7 +14,9 @@ const char* board_firmware_verion = "smartLgt_0.91";
 // 응용 프로그램 구성 사용하기                       
 //==========================================================================================
 #include "app_config.h"
+#include "ESP32Servo.h"
 APP_CONFIG app;
+Servo servo;
 
 
 //==========================================================================================
@@ -28,10 +30,10 @@ APP_CONFIG app;
 //==========================================================================================
 // 전역 변수 선언                                   
 //==========================================================================================
-int TRIG = D9;                                    // 초음파 송신 핀
-int ECHO = D8;                                    // 초음파 수신 핀
-int brightness_value;                             // 조도 센서 값(밝기)
-float distance_value;                             // 초음파 센서 값(거리)
+const int touch_sensor = D2;                      // 터치센서 핀
+const int servo_motor = D5;                       // 서보모터 핀
+int touch_sensor_result;                          // 터치 센서 값(0/1)
+int Count = 0;                                        // 모이를 준 횟수
 
 
 //==========================================================================================
@@ -55,8 +57,10 @@ void custom_setup()                               // 사용자 맞춤형 설정 
   //----------------------------------------------------------------------------------------
   // 초음파 센서 핀 설정                            
   //----------------------------------------------------------------------------------------
-  pinMode(TRIG, OUTPUT);                          // 초음파 송신 핀을 출력 모드로 설정
-  pinMode(ECHO, INPUT);                           // 초음파 수신 핀을 입력 모드로 설정
+  servo.attach(servo_motor);                      // 서보모터 제어 시작
+  servo.write(50);                                // 서보모터를 기본(닫힘) 상태로 초기화
+
+  pinMode(touch_sensor, INPUT);                   // 터치센서 핀을 입력 모드로 설정
 }
 
 
@@ -111,34 +115,11 @@ void loop()                                       // 반복 루틴
 void do_sensing_process()                         // 센싱 처리 함수
 //==========================================================================================
 {
-  
   //----------------------------------------------------------------------------------------
   // 조도 값 센싱하기; CDS 센서
   //----------------------------------------------------------------------------------------  
-  brightness_value = analogRead(A3);              // 조도 센서 읽기
+  delay(10);
 
-  //----------------------------------------------------------------------------------------
-  // 거리 값 센싱하기; 초음파 센서
-  //----------------------------------------------------------------------------------------  
-  pinMode(TRIG, OUTPUT);                          // TRIG 핀을 출력 모드로 설정
-  pinMode(ECHO, INPUT);                           // ECHO 핀을 입력 모드로 설정
-  delay(10);                                      // 10/1000초 만큼 대기
-  
-  //----------------------------------------------------------------------------------------
-  // 초음파 측정
-  //----------------------------------------------------------------------------------------  
-  digitalWrite(TRIG, LOW);
-  digitalWrite(ECHO, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG, LOW);
-  
-  //----------------------------------------------------------------------------------------
-  // 초음파 수신 값으로 거리 계산
-  //----------------------------------------------------------------------------------------  
-  float duration = pulseIn (ECHO, HIGH);      
-  distance_value = duration * 17 / 1000;  
 }
 
 
@@ -153,26 +134,19 @@ void do_automatic_process()                       // 자동화 처리 함수
   //----------------------------------------------------------------------------------------  
   pinMode(D2, OUTPUT);                            // D2핀을 출력 모드로 설정
   pinMode(D3, OUTPUT);                            // D3핀을 출력 모도로 설정
-  
-  if (brightness_value < 1000) {                  // 밝기가 1000 미만이면
-    digitalWrite(D3, HIGH);                       // D3핀을 켜기
-    app.dg_Write(D3, HIGH);                       // D3핀 값 저장하기
+  delay(10);
+
+  touch_sensor_result = digitalRead(touch_sensor);// 터치 센서 읽기
     
-    if (distance_value < 8) {                     // 거리가 8cm 미만이면
-      digitalWrite(D2, HIGH);                     // D2핀을 켜기
-      app.dg_Write(D2, HIGH);                     // D2핀 값 저장하기
-    }
-    else {                                        // 그렇지 않으면
-      digitalWrite(D2, LOW);                      // D2핀을 끄기
-      app.dg_Write(D2, LOW);                      // D2핀 값 저장하기
-    }
-    
+  if(touch_sensor_result == HIGH)       // 터치센서가 눌러졌으면
+  {
+    servo.write(0);                     // 서보모터를 열림 상태로 만듦
+    delay(1000);                        // 모이가 내려가길 2초동안 기다림
+    Count ++;
   }
-  else {                                          // 그렇지 않으면
-    digitalWrite(D2, LOW);                        // D2핀 끄기
-    app.dg_Write(D2, LOW);                        // D2핀 값 저장하기
-    digitalWrite(D3, LOW);                        // D3핀을 끄기
-    app.dg_Write(D3, LOW);                        // D3핀 값 저장하기
+  else
+  {
+    servo.write(50);                    // 서보모터를 기본(닫힘) 상태로 초기화
   }
 }
 
@@ -184,8 +158,7 @@ void send_sensor_value()                          // 센서 값 송신 함수
   // 예시 {"distance":88.08,"brightness":2914}
   
   DynamicJsonDocument doc(256);                   // json 
-  doc["distance"] = app.etboard.round2(distance_value); // 거리 값 송신, 소수점 2자리
-  doc["brightness"] = brightness_value;           // 조도 값 송신
+  doc["Count"] = Count; // 거리 값 송신, 소수점 2자리
 
   String output;                                  // 문자열 변수
   serializeJson(doc, output);                     // json을 문자열로 변환
@@ -239,6 +212,20 @@ void recv_automatic_mode(void)                    // 동작 모드 수신 함수
         digitalWrite(D5, HIGH);                   // D5 핀 LED 켜기
         }
       });
+      
+  app.mqtt.client.subscribe(
+    app.mqtt.get_cmnd_prefix() + "/moi", // operation_mode 명령을 수신
+    [&](const String & payload) {                 // 명령 내용을 payload에 저장       
+      pinMode(D5, OUTPUT);                        // D5 핀을 출력 모드로 설정
+      if (payload == "1"){                // 자동모드 설정 명령이면
+        servo.write(0);                     // 서보모터를 열림 상태로 만듦
+        delay(1000);                        // 모이가 내려가길 2초동안 기다림
+        servo.write(50);
+      }
+      else{
+        servo.write(50);
+      }
+    });
 }
 
 
