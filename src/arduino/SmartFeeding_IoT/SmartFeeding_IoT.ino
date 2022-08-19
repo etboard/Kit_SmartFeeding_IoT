@@ -1,14 +1,14 @@
 /******************************************************************************************
- * FileName     : SmartLight_iot.ino
+ * FileName     : SmartFeeding_iot.ino
  * Description  : 이티보드 스마트 모이공급 코딩 키트(IoT)
  * Author       : SCS
- * Created Date : 2022.08.06
+ * Created Date : 2022.08.19
  * Reference    : 
- * Modified     : 2022.08.10 : SCS
+ * Modified     : 2022.08.19 : LSC
  * Modified     : 
 ******************************************************************************************/
 const char* board_hardware_verion = "ETBoard_V1.1";
-const char* board_firmware_verion = "smartLgt_0.91";
+const char* board_firmware_verion = "smartFeeding_0.91";
 
 //================================================-=========================================
 // 응용 프로그램 구성 사용하기                       
@@ -33,7 +33,7 @@ Servo servo;
 const int touch_sensor = D2;                      // 터치센서 핀
 const int servo_motor = D5;                       // 서보모터 핀
 int touch_sensor_result;                          // 터치 센서 값(0/1)
-int Count = 0;                                        // 모이를 준 횟수
+int Count = 0;                                    // 모이를 준 횟수
 
 
 //==========================================================================================
@@ -69,7 +69,6 @@ void loop()                                       // 반복 루틴
 //==========================================================================================
 //  (권장 사항) 이 함수를 가능하면 수정하지 마십시오 !!! 
 //  do_sensing_process(), do_automatic_process(), send_sensor_value(), 
-//  send_digital_output_value()를 수정하십시오.
 //------------------------------------------------------------------------------------------
 {
   //----------------------------------------------------------------------------------------
@@ -93,16 +92,9 @@ void loop()                                       // 반복 루틴
   // 주기적으로 메시지 전송 처리
   //----------------------------------------------------------------------------------------
   if (millis() - app.lastMillis > NORMAL_SEND_INTERVAL) {  
-    send_sensor_value();                        // 센서 값 송신
-    app.lastMillis = millis();                  // 현재 시각 업데이트
+    send_sensor_value();                          // 센서 값 송신
+    app.lastMillis = millis();                    // 현재 시각 업데이트
   }  
-
-  //----------------------------------------------------------------------------------------
-  // 디지털 값이 변경되었으면 바로 송신
-  //----------------------------------------------------------------------------------------    
-  if (app.isChanged_digital_value() == true) {   // 디지털 값이 변경 여부
-    send_digital_output_value();                 // 디지털 출력 값 송신
-  }
 
   //----------------------------------------------------------------------------------------
   // 동작 상태 LED 깜밖이기
@@ -116,10 +108,10 @@ void do_sensing_process()                         // 센싱 처리 함수
 //==========================================================================================
 {
   //----------------------------------------------------------------------------------------
-  // 조도 값 센싱하기; CDS 센서
+  // 터치센서 핀 연결하기;
   //----------------------------------------------------------------------------------------  
   delay(10);
-
+  touch_sensor_result = digitalRead(touch_sensor);// 터치 센서 읽기
 }
 
 
@@ -130,23 +122,19 @@ void do_automatic_process()                       // 자동화 처리 함수
 //------------------------------------------------------------------------------------------
 {  
   //----------------------------------------------------------------------------------------  
-  // 가로등 모듈의 LED 제어
+  // 모이 모듈의 서보모터 제어
   //----------------------------------------------------------------------------------------  
-  pinMode(D2, OUTPUT);                            // D2핀을 출력 모드로 설정
-  pinMode(D3, OUTPUT);                            // D3핀을 출력 모도로 설정
-  delay(10);
-
-  touch_sensor_result = digitalRead(touch_sensor);// 터치 센서 읽기
-    
-  if(touch_sensor_result == HIGH)       // 터치센서가 눌러졌으면
+  pinMode(touch_sensor, INPUT);   
+  
+  if(touch_sensor_result == HIGH)                 // 터치센서가 눌러졌으면
   {
-    servo.write(0);                     // 서보모터를 열림 상태로 만듦
-    delay(1000);                        // 모이가 내려가길 2초동안 기다림
+    servo.write(0);                               // 서보모터를 열림 상태로 만듦
+    delay(1000);                                  // 모이가 내려가길 2초동안 기다림
     Count ++;
   }
   else
   {
-    servo.write(50);                    // 서보모터를 기본(닫힘) 상태로 초기화
+    servo.write(50);                              // 서보모터를 기본(닫힘) 상태로 초기화
   }
 }
 
@@ -155,36 +143,15 @@ void do_automatic_process()                       // 자동화 처리 함수
 void send_sensor_value()                          // 센서 값 송신 함수
 //==========================================================================================
 { 
-  // 예시 {"distance":88.08,"brightness":2914}
+  // 예시 {"Count":9}
   
   DynamicJsonDocument doc(256);                   // json 
-  doc["Count"] = Count; // 거리 값 송신, 소수점 2자리
+  doc["Count"] = Count;                           // 모이 횟수 값
 
   String output;                                  // 문자열 변수
   serializeJson(doc, output);                     // json을 문자열로 변환
   app.mqtt.publish_tele("/sensor", output);       // 송신
 }
-
-
-//==========================================================================================
-void send_digital_output_value()                  // 디지털 출력 값 송신 함수
-//==========================================================================================
-{
-  // 예시 {"D2":0,"D3":0}
-  
-  DynamicJsonDocument doc(256);                   // json 
-  doc["D2"] = app.dg_Read(D2);                    // D2 핀 값
-  doc["D3"] = app.dg_Read(D3);                    // D3 핀 값
-
-  String output;                                  // 문자열 변수
-  serializeJson(doc, output);                     // json을 문자열로 변환
-  app.mqtt.publish_tele("/digital_output", output);  // 송신
-  
-  app.update_digital_value();
-  
-  delay(100);
-}
-
 
 //==========================================================================================
 void onConnectionEstablished()                    // MQTT 연결되었을 때 동작하는 함수
@@ -214,13 +181,13 @@ void recv_automatic_mode(void)                    // 동작 모드 수신 함수
       });
       
   app.mqtt.client.subscribe(
-    app.mqtt.get_cmnd_prefix() + "/moi", // operation_mode 명령을 수신
+    app.mqtt.get_cmnd_prefix() + "/moi",          // operation_mode 명령을 수신
     [&](const String & payload) {                 // 명령 내용을 payload에 저장       
-      pinMode(D5, OUTPUT);                        // D5 핀을 출력 모드로 설정
-      if (payload == "1"){                // 자동모드 설정 명령이면
-        servo.write(0);                     // 서보모터를 열림 상태로 만듦
-        delay(1000);                        // 모이가 내려가길 2초동안 기다림
+      if (payload == "1"){                        // 자동모드 설정 명령이면
+        servo.write(0);                           // 서보모터를 열림 상태로 만듦
+        delay(1000);                              // 모이가 내려가길 2초동안 기다림
         servo.write(50);
+        delay(2000);
       }
       else{
         servo.write(50);
