@@ -6,6 +6,7 @@
  * Reference    : 
  * Modified     : 2022.08.22 : LSC
  * Modified     : 
+ * Warnning     : 반드시 서보모터를 3.3v 대신 5V에 연결해야 함.
 ******************************************************************************************/
 const char* board_hardware_verion = "ETBoard_V1.1";
 const char* board_firmware_verion = "smartFd_0.91";
