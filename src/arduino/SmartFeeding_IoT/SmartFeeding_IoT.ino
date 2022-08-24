@@ -188,13 +188,13 @@ void recv_automatic_mode(void)                    // 동작 모드 수신 함수
     [&](const String & payload) {                 // 명령 내용을 payload에 저장       
       if (payload == "1"){                        // 자동모드 설정 명령이면
         servo.write(0);                           // 서보모터를 열림 상태로 만듦
-        delay(1000);                              // 모이가 내려가길 2초동안 기다림
-        servo.write(50);
+        delay(1000);                              // 모이가 내려가길 1초동안 기다림
+        servo.write(50);                          // 서보모터를 닫기
         delay(2000);
-        Count ++;
+        Count ++;                                 // 모이 준 횟수
       }
       else{
-        servo.write(50);
+        servo.write(50);                          // 서보모터를 닫기
       }
     });
 }
